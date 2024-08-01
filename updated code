@@ -1,0 +1,56 @@
+#include "SevSeg.h"
+SevSeg sevseg; 
+// Metronome settings
+const int buzzerPin = 9; // Pin for the buzzer
+const int potPin = A0;   // Pin for the potentiometer
+const int buttonPin = 13; // Pin for the push button
+
+int tempo = 180;         // Default tempo in beats per minute
+bool metronomeActive = false;
+ byte numDigits = 4;
+  byte digitPins[] = {22, 23, 26, 27};
+  byte segmentPins[] = {5, 7, 3, 52, 50, 6, 4, 2};
+
+void setup() {
+  pinMode(buzzerPin, OUTPUT);
+  pinMode(buttonPin, INPUT_PULLUP);
+  
+
+  // Initialize Serial Monitor for debugging
+  Serial.begin(9600);
+
+  bool resistorsOnSegments = true; 
+  bool updateWithDelaysIn = true;
+  byte hardwareConfig = COMMON_CATHODE; 
+  sevseg.begin(hardwareConfig, numDigits, digitPins, segmentPins, resistorsOnSegments);
+  sevseg.setBrightness(90);
+}
+
+void loop() {
+  int potValue = analogRead(potPin);
+  tempo = map(potValue, 0, 1023, 40, 200); // Map potentiometer to tempo range
+  
+  // Check button state
+  if (digitalRead(buttonPin) == LOW) {
+    metronomeActive = !metronomeActive;
+    delay(300); // Debounce delay
+  }
+
+  // Metronome logic
+  if (metronomeActive) {
+    unsigned long interval = 45000 / tempo; // Calculate interval in milliseconds
+    tone(buzzerPin, 5000); // Generate a tone on the buzzer
+    delay(50); // Duration of the beep
+    noTone(buzzerPin); // Stop the tone
+    delay(interval - 50); // Wait for the rest of the interval
+  } else {
+    noTone(buzzerPin); // Ensure buzzer is off if metronome is not active
+  }
+  
+  // Debug output to Serial Monitor
+  Serial.print("Tempo: ");
+  Serial.println(tempo);
+  delay(100); // Short delay for stability
+  sevseg.setNumber(4999, 3);
+  sevseg.refreshDisplay(); 
+}
