@@ -1,0 +1,100 @@
+#include <SevSeg.h>
+
+SevSeg sevseg;
+
+const int buzzerPin = 9;  // Pin for the buzzer
+const int potPin = A0;    // Pin for the potentiometer
+const int buttonPin = 13; // Pin for the push button
+
+int tempo = 120;          // Default tempo in beats per minute
+bool metronomeActive = false;
+bool stopwatchRunning = false;
+bool stopwatchReset = false;
+unsigned long startTime;
+unsigned long elapsedTime;
+unsigned long lastButtonPressTime = 0;
+
+void setup() {
+  pinMode(buzzerPin, OUTPUT);
+  pinMode(buttonPin, INPUT_PULLUP);
+
+  // Initialize Serial Monitor for debugging
+  Serial.begin(9600);
+
+  // Configure 7-segment display
+  byte numDigits = 4;
+  byte digitPins[] = {22, 23, 26, 27}; // Digit control pins
+  byte segmentPins[] = {5, 7, 3, 52, 50, 6, 4, 2}; // Segment pins
+  bool resistorsOnSegments = true;
+  bool updateWithDelays = false;
+  bool leadingZeros = true;
+  bool disableDecPoint = true;
+
+  sevseg.begin(COMMON_CATHODE, numDigits, digitPins, segmentPins, resistorsOnSegments, updateWithDelays, leadingZeros, disableDecPoint);
+  sevseg.setBrightness(90);
+}
+
+void loop() {
+  int potValue = analogRead(potPin);
+  tempo = map(potValue, 0, 1023, 40, 200); // Map potentiometer to tempo range
+
+  // Check button state
+  if (digitalRead(buttonPin) == LOW) {
+    if (millis() - lastButtonPressTime > 300) { // Debounce delay
+      if (!stopwatchRunning && !stopwatchReset) {
+        // Start the stopwatch
+        stopwatchRunning = true;
+        startTime = millis(); // Record the start time
+        stopwatchReset = false;
+      } else if (stopwatchRunning && !stopwatchReset) {
+        // Stop the stopwatch
+        stopwatchRunning = false;
+        elapsedTime += (millis() - startTime); // Add the time elapsed before stopping
+      } else {
+        // Reset the stopwatch
+        stopwatchRunning = false;
+        stopwatchReset = false;
+        elapsedTime = 0;
+      }
+      metronomeActive = !metronomeActive; // Toggle metronome state
+      lastButtonPressTime = millis(); // Update last button press time
+    }
+  }
+
+  // Stopwatch logic
+  if (stopwatchRunning) {
+    elapsedTime = (millis() - startTime) / 1000; // Calculate elapsed time in seconds
+    displayTime(elapsedTime);
+  } else {
+    displayTime(elapsedTime / 1000); // Display the elapsed time
+  }
+
+  // Metronome logic
+  if (metronomeActive) {
+    unsigned long interval = 60000 / tempo; // Calculate interval in milliseconds
+    unsigned long currentMillis = millis();
+    static unsigned long lastBeepTime = 0;
+
+    if (currentMillis - lastBeepTime >= interval) {
+      tone(buzzerPin, 1000); // Generate a tone on the buzzer
+      delay(50); // Duration of the beep
+      noTone(buzzerPin); // Stop the tone
+      lastBeepTime = currentMillis; // Update last beep time
+    }
+  } else {
+    noTone(buzzerPin); // Ensure buzzer is off if metronome is not active
+  }
+
+  // Debug output to Serial Monitor
+  Serial.print("Tempo: ");
+  Serial.println(tempo);
+  delay(100); // Short delay for stability
+}
+
+void displayTime(unsigned long timeInSeconds) {
+  int minutes = timeInSeconds / 60;
+  int seconds = timeInSeconds % 60;
+  int displayNumber = minutes * 100 + seconds;
+  sevseg.setNumber(displayNumber, 2); // Show two decimal points for MM:SS format
+  sevseg.refreshDisplay();
+}
